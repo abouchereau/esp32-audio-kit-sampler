@@ -20,6 +20,11 @@
 
 bool key1_down = false;
 bool key2_down = false;
+bool key3_down = false;
+bool key4_down = false;
+bool key5_down = false;
+bool key6_down = false;
+
 
 // ==== Codec ====
 ES8388 es(33, 32, 400000);
@@ -67,12 +72,12 @@ bool skipWavHeader(File &f) {
   return true;
 }
 
-void startPlayback() {
-  Serial.println("Démarrage lecture test.wav");
+void startPlayback(String filename) {
+  Serial.println("Démarrage lecture "+filename+".wav");
 
-  wavFile = SD.open("/test.wav");
+  wavFile = SD.open("/"+filename+".wav");
   if (!wavFile) {
-    Serial.println("❌ Impossible d’ouvrir test.wav");
+    Serial.println("❌ Impossible d’ouvrir "+filename+".wav");
     return;
   }
   if (!skipWavHeader(wavFile)) {
@@ -107,7 +112,13 @@ void onKeyPress(int keynum) {
     break;
     case 2: 
       delay(150);
-      startPlayback();
+      startPlayback("A0");
+    break;
+    case 3: 
+      delay(150);
+      startPlayback("A1");
+    break;
+    default: 
     break;
   }
 }
@@ -117,6 +128,21 @@ void onKeyRelease(int keynum) {
   Serial.println(keynum);
 }
 
+void manageKeys() {
+  if (!digitalRead(KEY1) && !key1_down) {key1_down = true;onKeyPress(1);}
+  if (digitalRead(KEY1) && key1_down) {key1_down = false;onKeyRelease(1);}
+  if (!digitalRead(KEY2) && !key2_down) {key2_down = true;onKeyPress(2);}
+  if (digitalRead(KEY2) && key2_down) {key2_down = false;onKeyRelease(2);}
+  if (!digitalRead(KEY3) && !key3_down) {key3_down = true;onKeyPress(3);}
+  if (digitalRead(KEY3) && key3_down) {key3_down = false;onKeyRelease(3);}
+  if (!digitalRead(KEY4) && !key4_down) {key4_down = true;onKeyPress(4);}
+  if (digitalRead(KEY4) && key4_down) {key4_down = false;onKeyRelease(4);}
+  if (!digitalRead(KEY5) && !key5_down) {key5_down = true;onKeyPress(5);}
+  if (digitalRead(KEY5) && key5_down) {key5_down = false;onKeyRelease(5);}
+  if (!digitalRead(KEY6) && !key6_down) {key6_down = true;onKeyPress(6);}
+  if (digitalRead(KEY6) && key6_down) {key6_down = false;onKeyRelease(6);}
+}
+
 void setup() {
   Serial.begin(115200);
   delay(300);
@@ -124,6 +150,10 @@ void setup() {
   // ==== Init boutons ====
   pinMode(KEY1, INPUT_PULLUP);
   pinMode(KEY2, INPUT_PULLUP);
+  pinMode(KEY3, INPUT_PULLUP);
+  pinMode(KEY4, INPUT_PULLUP);
+  pinMode(KEY5, INPUT_PULLUP);
+  pinMode(KEY6, INPUT_PULLUP);
 
   // ==== ES8388 ====
   if (!es.init()) Serial.println("Init Fail");
@@ -142,7 +172,10 @@ void setup() {
   SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
   SD.begin(SD_CS);
 
-  Serial.println("Prêt. Appuie sur KEY2 pour lire test.wav");
+
+  Serial.println("READY !");
+
+  startPlayback("boot");
 }
 
 
@@ -150,25 +183,7 @@ void setup() {
 
 void loop() {
 
-  if (!digitalRead(KEY2) && !key2_down) {
-    key2_down = true;
-    onKeyPress(2);
-  }
-  if (digitalRead(KEY2) && key2_down) {
-    key2_down = false;
-    onKeyRelease(2);
-  }
-
-  if (!digitalRead(KEY1) && !key1_down) {
-    key1_down = true;
-    onKeyPress(1);
-  }
-  if (digitalRead(KEY1) && key1_down) {
-    key1_down = false;
-    onKeyRelease(1);
-  }
-
-
+  manageKeys();
 
   // ---- 2. LECTURE EN COURS ----
   if (playing) {
