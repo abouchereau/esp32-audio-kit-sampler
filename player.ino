@@ -1,14 +1,21 @@
+#include <Wire.h>
+//https://github.com/joeyoung/arduino_keypads/tree/master/Keypad_I2C
+#include <Keypad_I2C.h>
+#include <Keypad.h>
 #include <Arduino.h>
 #include <SD.h>
 #include <SPI.h>
 #include "driver/i2s.h"
 #include "ES8388.h"
 
-// ==== Broches SD (validées par toi) ====
 #define SD_CS   13
 #define SD_SCK  14
 #define SD_MISO 2
 #define SD_MOSI 15
+
+#define I2C_ADDR 0x20    
+#define SDA_PIN 21
+#define SCL_PIN 22
 
 // ==== Boutons ====
 #define KEY1 36 
@@ -55,6 +62,31 @@ i2s_pin_config_t i2s_pins = {
 File wavFile;
 bool playing = false;
 
+const byte ROWS = 4; 
+const byte COLS = 4;
+
+char setList = 'A';
+int volumeGeneral = 80;
+
+// Disposition des touches (adapter si ton clavier diffère)
+char keys[ROWS][COLS] = {
+  {'1','2','3','A'},
+  {'4','5','6','B'},
+  {'7','8','9','C'},
+  {'*','0','#','D'}
+};
+
+// Sur un PCF8574, les pins vont de 0 à 7.
+// Mapping typique :
+//   P0–P3 = lignes
+//   P4–P7 = colonnes
+byte rowPins[ROWS] = {0, 1, 2, 3};
+byte colPins[COLS] = {4, 5, 6, 7};
+
+// Création du keypad via I2C
+Keypad_I2C keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS, I2C_ADDR, PCF8574 );
+
+
 bool skipWavHeader(File &f) {
   uint8_t h[44];
   if (f.size() < 44) return false;
@@ -78,12 +110,19 @@ void startPlayback(String filename) {
   wavFile = SD.open("/"+filename+".wav");
   if (!wavFile) {
     Serial.println("❌ Impossible d’ouvrir "+filename+".wav");
-    return;
+	wavFile = SD.open("/file_not_found.wav");
+	if (!wavFile) {
+		Serial.println("❌ Impossible d’ouvrir file_not_found.wav");
+		return;
+	}
   }
   if (!skipWavHeader(wavFile)) {
     Serial.println("❌ Format WAV incompatible");
-    wavFile.close();
-    return;
+	wavFile = SD.open("/bad_file_format.wav");
+	if (!wavFile) {
+		Serial.println("❌ Impossible d’ouvrir bad_file_format.wav");
+		return;
+	}
   }
 
   playing = true;
@@ -143,6 +182,30 @@ void manageKeys() {
   if (digitalRead(KEY6) && key6_down) {key6_down = false;onKeyRelease(6);}
 }
 
+void manageKeyPad(char key) {
+	switch(key) {
+		case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': 
+			delay(150);		  
+			startPlayback(String(setList) + String(key));
+		break;
+		case 'A': case 'B': case 'C': case 'D': 
+			setList = key;
+		break;
+		case '*': 
+		  delay(150);
+		  stopPlayback();
+		break;
+		case '#':
+			volume -= 20;
+			if (volume<10) {
+				volume = 80;
+			}			
+			es.setOutputVolume(volume);
+		default: 
+		break;
+	}
+}
+
 void setup() {
   Serial.begin(115200);
   delay(300);
@@ -162,7 +225,7 @@ void setup() {
   es.mixerSourceSelect(MIXADC, MIXADC);
   es.mixerSourceControl(DACOUT);
   es.outputSelect(OUT2);
-  es.setOutputVolume(80);
+  es.setOutputVolume(volume);
 
   // ==== I2S ====
   i2s_driver_install(I2S_NUM_0, &i2s_cfg, 0, NULL);
@@ -171,8 +234,12 @@ void setup() {
   // ==== SD ====
   SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
   SD.begin(SD_CS);
-
-
+  
+  //Clavier
+  Wire.begin(SDA_PIN, SCL_PIN);
+  keypad.begin();
+  keypad.setDebounceTime(10);  
+  
   Serial.println("READY !");
 
   startPlayback("boot");
@@ -184,6 +251,11 @@ void setup() {
 void loop() {
 
   manageKeys();
+  
+  char key = keypad.getKey();
+  if (key) {
+	manageKeyPad(key);
+  }
 
   // ---- 2. LECTURE EN COURS ----
   if (playing) {
