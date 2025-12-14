@@ -6,7 +6,7 @@
 #include <SD.h>
 #include <SPI.h>
 #include "driver/i2s.h"
-// /!\ modifier cette librairie et supprimer le destructeur !
+// /!\ modifier cette librairie pour supprimer le destructeur !
 #include "ES8388.h"
 
 #define SD_CS   13
@@ -58,7 +58,7 @@ const byte ROWS = 4;
 const byte COLS = 4;
 
 char setList = 'A';
-int volumeGeneral = 80;
+float volumeGeneral = 0.8f;
 
 char keys[ROWS][COLS] = {
   {'1','2','3','A'},
@@ -120,7 +120,6 @@ void stopPlayback() {
     wavFile.close();
     playing = false;
 
-    // Envoi silence
     uint8_t zero[512] = {0};
     size_t written;
     i2s_write(I2S_NUM_0, zero, sizeof(zero), &written, 10);
@@ -142,9 +141,9 @@ void manageKeyPad(char key) {
 		  stopPlayback();
 		break;
 		case '#':
-			volumeGeneral -= 20;
-			if (volumeGeneral<10) {
-				volumeGeneral = 80;
+			volumeGeneral += 0.2f;
+			if (volumeGeneral > 0.8f) {
+				volumeGeneral = 0.2f;
 			}			
 			es->setOutputVolume(volumeGeneral);
 		default: 
@@ -170,10 +169,19 @@ void setup() {
   es->mixerSourceSelect(MIXADC, MIXADC);
   es->mixerSourceControl(DACOUT);
   es->outputSelect(OUT2);
-  es->setOutputVolume(volumeGeneral);
+  es->setOutputVolume(80);
+
+  i2s_driver_uninstall(I2S_NUM_0);
+  delay(10);
+
 
   i2s_driver_install(I2S_NUM_0, &i2s_cfg, 0, NULL);
   i2s_set_pin(I2S_NUM_0, &i2s_pins);
+
+
+  uint8_t silence[256] = {0};
+  size_t written;
+  i2s_write(I2S_NUM_0, silence, sizeof(silence), &written, 50);
 
   SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
   SD.begin(SD_CS);
@@ -199,6 +207,13 @@ void loop() {
     size_t n = wavFile.read(buffer, sizeof(buffer));
 
     if (n > 0) {
+      int16_t* samples = (int16_t*)buffer;
+      int sampleCount = n / 2;
+
+      for (int i = 0; i < sampleCount; i++) {
+        samples[i] = (int16_t)(samples[i] * volumeGeneral);
+      }
+
       size_t written;
       i2s_write(I2S_NUM_0, buffer, n, &written, portMAX_DELAY);
     } else {
