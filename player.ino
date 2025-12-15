@@ -15,8 +15,10 @@
 #define SD_MOSI 15
 
 #define I2C_ADDR 0x20    
-#define SDA_PIN 21
-#define SCL_PIN 22
+#define SDA_CODEC 33
+#define SCL_CODEC 32
+#define SDA_KEYS 21
+#define SCL_KEYS 22
 
 
 //#define KEY1 36 
@@ -25,6 +27,9 @@
 //#define KEY4 23 
 //#define KEY5 18 
 //#define KEY6 5
+
+TwoWire I2C_CODEC = Wire;    // bus 0
+TwoWire I2C_KEYS  = Wire1;   // bus 1
 
 
 ES8388* es = nullptr;
@@ -70,7 +75,7 @@ char keys[ROWS][COLS] = {
 byte rowPins[ROWS] = {0, 1, 2, 3};
 byte colPins[COLS] = {4, 5, 6, 7};
 
-Keypad_I2C keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS, I2C_ADDR, PCF8574 );
+Keypad_I2C keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS, I2C_ADDR, 1, &I2C_KEYS);
 
 
 bool skipWavHeader(File &f) {
@@ -145,7 +150,6 @@ void manageKeyPad(char key) {
 			if (volumeGeneral > 0.8f) {
 				volumeGeneral = 0.2f;
 			}			
-			es->setOutputVolume(volumeGeneral);
 		default: 
 		break;
 	}
@@ -154,26 +158,27 @@ void manageKeyPad(char key) {
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Wire.begin(SDA_PIN, SCL_PIN);  
-  delay(50);
+  // Bus ES8388
+  I2C_CODEC.begin(SDA_CODEC, SCL_CODEC, 400000);
 
-  es = new ES8388(33, 32, 400000);
-  if (!es->init()) {
-    Serial.println("ES8388 init FAILED");
-  } else {
-    Serial.println("ES8388 init OK");
+  // Bus PCF8574
+  I2C_KEYS.begin(SDA_KEYS, SCL_KEYS, 100000);
+
+  Serial.println("Scan CODEC bus:");
+  for (byte a = 1; a < 127; a++) {
+    I2C_CODEC.beginTransmission(a);
+    if (I2C_CODEC.endTransmission() == 0)
+      Serial.printf(" - 0x%02X\n", a);
   }
 
-  es->inputSelect(IN2);
-  es->setInputGain(8);
-  es->mixerSourceSelect(MIXADC, MIXADC);
-  es->mixerSourceControl(DACOUT);
-  es->outputSelect(OUT2);
-  es->setOutputVolume(80);
+  Serial.println("Scan KEYS bus:");
+  for (byte a = 1; a < 127; a++) {
+    I2C_KEYS.beginTransmission(a);
+    if (I2C_KEYS.endTransmission() == 0)
+      Serial.printf(" - 0x%02X\n", a);
+  }
 
-  i2s_driver_uninstall(I2S_NUM_0);
   delay(10);
-
 
   i2s_driver_install(I2S_NUM_0, &i2s_cfg, 0, NULL);
   i2s_set_pin(I2S_NUM_0, &i2s_pins);
@@ -189,6 +194,21 @@ void setup() {
   keypad.begin();
   keypad.setDebounceTime(10);  
   
+  // ✅ ES8388 partage le bus
+  es = new ES8388(I2C_CODEC);
+  if (!es->init()) {
+    Serial.println("ES8388 init FAILED");
+  } else {
+    Serial.println("ES8388 init OK");
+  }
+
+  es->inputSelect(IN2);
+  es->setInputGain(8);
+  es->mixerSourceSelect(MIXADC, MIXADC);
+  es->mixerSourceControl(DACOUT);
+  es->outputSelect(OUT2);
+  es->setOutputVolume(90);
+
   Serial.println("READY !");
   startPlayback("boot");
 }
