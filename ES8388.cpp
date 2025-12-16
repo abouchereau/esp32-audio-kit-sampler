@@ -61,39 +61,35 @@
 #define ES8388_DACCONTROL29 0x33
 #define ES8388_DACCONTROL30 0x34
 
-ES8388::ES8388(uint8_t _sda, uint8_t _scl, uint32_t _speed) {
-  _pinsda = _sda;
-  _pinscl = _scl;
-  _i2cspeed = _speed;
-  i2c.begin(_sda, _scl, _speed);
+ES8388::ES8388(TwoWire& wire) {
+  _wire = &wire;
 }
 
-//ES8388::~ES8388() { i2c.~TwoWire(); }
 
 bool ES8388::write_reg(uint8_t reg_add, uint8_t data) {
-  i2c.beginTransmission(ES8388_ADDR);
-  i2c.write(reg_add);
-  i2c.write(data);
-  return i2c.endTransmission() == 0;
+  _wire->beginTransmission(ES8388_ADDR);
+  _wire->write(reg_add);
+  _wire->write(data);
+  return _wire->endTransmission() == 0;
 }
 
 bool ES8388::read_reg(uint8_t reg_add, uint8_t& data) {
   bool retval = false;
-  i2c.beginTransmission(ES8388_ADDR);
-  i2c.write(reg_add);
-  i2c.endTransmission(false);
-  i2c.requestFrom((uint16_t)ES8388_ADDR, (uint8_t)1, true);
-  if (i2c.available() >= 1) {
-    data = i2c.read();
+  _wire->beginTransmission(ES8388_ADDR);
+  _wire->write(reg_add);
+  _wire->endTransmission(false);
+  _wire->requestFrom((uint16_t)ES8388_ADDR, (uint8_t)1, true);
+  if (_wire->available() >= 1) {
+    data = _wire->read();
     retval = true;
   }
   return retval;
 }
 
 bool ES8388::identify(int sda, int scl, uint32_t frequency) {
-  i2c.begin(sda, scl, frequency);
-  i2c.beginTransmission(ES8388_ADDR);
-  return i2c.endTransmission() == 0;
+  _wire->begin(sda, scl, frequency);
+  _wire->beginTransmission(ES8388_ADDR);
+  return _wire->endTransmission() == 0;
 }
 
 uint8_t* ES8388::readAllReg() {
