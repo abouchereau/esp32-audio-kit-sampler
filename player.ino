@@ -28,12 +28,10 @@
 //#define KEY5 18 
 //#define KEY6 5
 
-TwoWire I2C_CODEC = Wire;    // bus 0
-TwoWire I2C_KEYS  = Wire1;   // bus 1
-
+TwoWire I2C_CODEC = Wire;    
+TwoWire I2C_KEYS  = Wire1;   
 
 ES8388* es = nullptr;
-
 
 i2s_config_t i2s_cfg = {
   .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
@@ -63,7 +61,7 @@ const byte ROWS = 4;
 const byte COLS = 4;
 
 char setList = 'A';
-float volumeGeneral = 0.8f;
+float volumeGeneral = 0.9f;
 
 char keys[ROWS][COLS] = {
   {'1','2','3','A'},
@@ -146,10 +144,11 @@ void manageKeyPad(char key) {
 		  stopPlayback();
 		break;
 		case '#':
-			volumeGeneral += 0.2f;
-			if (volumeGeneral > 0.8f) {
-				volumeGeneral = 0.2f;
+			volumeGeneral += 0.3f;
+			if (volumeGeneral > 0.91f) {
+				volumeGeneral = 0.3f;
 			}			
+    break;
 		default: 
 		break;
 	}
@@ -158,31 +157,13 @@ void manageKeyPad(char key) {
 void setup() {
   Serial.begin(115200);
   delay(300);
-  // Bus ES8388
   I2C_CODEC.begin(SDA_CODEC, SCL_CODEC, 400000);
-
-  // Bus PCF8574
   I2C_KEYS.begin(SDA_KEYS, SCL_KEYS, 100000);
-
-  Serial.println("Scan CODEC bus:");
-  for (byte a = 1; a < 127; a++) {
-    I2C_CODEC.beginTransmission(a);
-    if (I2C_CODEC.endTransmission() == 0)
-      Serial.printf(" - 0x%02X\n", a);
-  }
-
-  Serial.println("Scan KEYS bus:");
-  for (byte a = 1; a < 127; a++) {
-    I2C_KEYS.beginTransmission(a);
-    if (I2C_KEYS.endTransmission() == 0)
-      Serial.printf(" - 0x%02X\n", a);
-  }
 
   delay(10);
 
   i2s_driver_install(I2S_NUM_0, &i2s_cfg, 0, NULL);
   i2s_set_pin(I2S_NUM_0, &i2s_pins);
-
 
   uint8_t silence[256] = {0};
   size_t written;
@@ -193,8 +174,7 @@ void setup() {
 
   keypad.begin();
   keypad.setDebounceTime(10);  
-  
-  // ✅ ES8388 partage le bus
+
   es = new ES8388(I2C_CODEC);
   if (!es->init()) {
     Serial.println("ES8388 init FAILED");
@@ -210,6 +190,7 @@ void setup() {
   es->setOutputVolume(90);
 
   Serial.println("READY !");
+  delay(200);
   startPlayback("boot");
 }
 
