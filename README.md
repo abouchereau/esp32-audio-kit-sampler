@@ -1,1 +1,5 @@
-![Screenshot of a comment on a GitHub issue showing an image, added in the Markdown, of an Octocat smiling and raising a tentacle.](https://github.com/abouchereau/esp32-audio-kit-sampler/blob/main/params.png)
+![](https://github.com/abouchereau/esp32-audio-kit-sampler/blob/main/params.png)
+![](https://github.com/abouchereau/esp32-audio-kit-sampler/blob/main/20251210_082327.jpg)
+![](https://github.com/abouchereau/esp32-audio-kit-sampler/blob/main/20251210_082334.jpg)
+![](https://github.com/abouchereau/esp32-audio-kit-sampler/blob/main/20251210_082339.jpg)
+![](https://github.com/abouchereau/esp32-audio-kit-sampler/blob/main/20251210_082350.jpg)
