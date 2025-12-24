@@ -20,14 +20,6 @@
 #define SDA_KEYS 21
 #define SCL_KEYS 22
 
-
-//#define KEY1 36 
-//#define KEY2 13 
-//#define KEY3 19 
-//#define KEY4 23 
-//#define KEY5 18 
-//#define KEY6 5
-
 TwoWire I2C_CODEC = Wire;    
 TwoWire I2C_KEYS  = Wire1;   
 
@@ -61,7 +53,15 @@ const byte ROWS = 4;
 const byte COLS = 4;
 
 char setList = 'A';
-float volumeGeneral = 0.9f;
+float volumeControl = 1.0f;
+float volumeGeneral = 0.9f;   // volume réellement appliqué
+float targetVolume  = 0.9f;   // volume cible
+
+float fadeDownFactor = 0.40f; 
+float fadeUpFactor  = 5.0f;  
+float volumeEpsilon  = 0.0005f;
+String nextTrack = "";
+bool pendingStart = false;
 
 char keys[ROWS][COLS] = {
   {'1','2','3','A'},
@@ -76,6 +76,32 @@ byte colPins[COLS] = {4, 5, 6, 7};
 Keypad_I2C keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS, I2C_ADDR, 1, &I2C_KEYS);
 
 
+inline void updateVolumeFade() {
+  //Fade IN
+  if (volumeGeneral < targetVolume) {
+    volumeGeneral *= fadeUpFactor;
+    if (volumeGeneral > targetVolume) {
+      volumeGeneral = targetVolume;
+    }
+    Serial.print("vol = ");
+    Serial.println(volumeGeneral);
+  } 
+  //Fade Out
+  else if (volumeGeneral > targetVolume) {
+    volumeGeneral *= fadeDownFactor;
+    if (volumeGeneral < targetVolume) {
+      volumeGeneral = targetVolume;
+    }  
+    if (volumeGeneral < volumeEpsilon || volumeGeneral < targetVolume) {
+      volumeGeneral = targetVolume;
+    }    
+    Serial.print("vol = ");
+    Serial.println(volumeGeneral);
+  }
+
+}
+
+
 bool skipWavHeader(File &f) {
   uint8_t h[44];
   if (f.size() < 44) return false;
@@ -88,14 +114,14 @@ bool skipWavHeader(File &f) {
   uint16_t ch  = h[22] | (h[23] << 8);
   uint32_t sr  = h[24] | (h[25] << 8) | (h[26] << 16) | (h[27] << 24);
   uint16_t bits= h[34] | (h[35] << 8);
-
   if (fmt != 1 || ch != 2 || sr != 44100 || bits != 16) return false;
   return true;
 }
 
 void startPlayback(String filename) {
   Serial.println("Démarrage lecture "+filename+".wav");
-
+  
+  
   wavFile = SD.open("/"+filename+".wav");
   if (!wavFile) {
     Serial.println("❌ Impossible d’ouvrir "+filename+".wav");
@@ -114,18 +140,26 @@ void startPlayback(String filename) {
     }
   }
 
+ // es->setOutputVolume(100);
+ // es->DACmute(false);
   playing = true;
 }
 
 void stopPlayback() {
+
   if (playing) {
     Serial.println("Lecture stoppée.");
     wavFile.close();
     playing = false;
-
     uint8_t zero[512] = {0};
     size_t written;
-    i2s_write(I2S_NUM_0, zero, sizeof(zero), &written, 10);
+
+    for (int i = 0; i < 6; i++) {
+      i2s_write(I2S_NUM_0, zero, sizeof(zero), &written, portMAX_DELAY);
+    }  
+
+  //  es->setOutputVolume(0);
+  //  es->DACmute(true);
   }
 }
 
@@ -133,20 +167,28 @@ void manageKeyPad(char key) {
   Serial.println(key);
 	switch(key) {
 		case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': 
-			delay(150);		  
-			startPlayback(String(setList) + String(key));
+      nextTrack = String(setList) + String(key);
+      if (playing) {
+        targetVolume = 0.0f;
+        pendingStart = true;
+      }
+      else {
+        volumeGeneral = 0.1f;
+        targetVolume = 0.9f;
+        startPlayback(nextTrack);
+      }
+
 		break;
 		case 'A': case 'B': case 'C': case 'D': 
 			setList = key;
 		break;
 		case '*': 
-		  delay(150);
 		  stopPlayback();
 		break;
-		case '#':
-			volumeGeneral += 0.3f;
-			if (volumeGeneral > 0.91f) {
-				volumeGeneral = 0.3f;
+		case '#':    
+			volumeControl += 0.4f;
+			if (volumeControl > 1.01f) {
+				volumeControl = 0.2f;
 			}			
     break;
 		default: 
@@ -183,7 +225,7 @@ void setup() {
   }
 
   es->inputSelect(IN2);
-  es->setInputGain(8);
+  es->setInputGain(0);
   es->mixerSourceSelect(MIXADC, MIXADC);
   es->mixerSourceControl(DACOUT);
   es->outputSelect(OUT2);
@@ -196,14 +238,14 @@ void setup() {
 
 
 
-
 void loop() {
   char key = keypad.getKey();
-  if (key) {
-	  manageKeyPad(key);
-  }
+  if (key) manageKeyPad(key);
+
+  updateVolumeFade();
 
   if (playing) {
+
     uint8_t buffer[1024];
     size_t n = wavFile.read(buffer, sizeof(buffer));
 
@@ -212,14 +254,22 @@ void loop() {
       int sampleCount = n / 2;
 
       for (int i = 0; i < sampleCount; i++) {
-        samples[i] = (int16_t)(samples[i] * volumeGeneral);
+        samples[i] = (int16_t)(samples[i] * volumeGeneral * volumeControl);
       }
 
       size_t written;
       i2s_write(I2S_NUM_0, buffer, n, &written, portMAX_DELAY);
-    } else {
-      Serial.println("Fin du fichier.");
+    } 
+    else {
       stopPlayback();
     }
+  }
+
+  // 🔥 gestion propre du changement de piste
+  if (pendingStart && volumeGeneral <= 0.001f) {
+    stopPlayback();
+    startPlayback(nextTrack);
+    targetVolume = 0.9f;
+    pendingStart = false;
   }
 }
