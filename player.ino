@@ -54,15 +54,12 @@ const byte COLS = 4;
 
 char setList = 'A';
 float volumeControl = 1.0f;
-float volumeGeneral = 0.8f;   // volume réellement appliqué
-float targetVolume  = 0.9f;   // volume cible
-
-float fadeDownFactor = 0.40f; 
-float fadeUpFactor  = 5.0f;  
-float volumeEpsilon  = 0.001f;
+int targetVolume  = 90;   // volume cible
+int volumeGeneral = 90;
+float volumeGeneralFloat = 0.9f;
 String nextTrack = "";
 bool pendingStart = false;
-
+bool pendingStop = false;
 uint32_t bytesRemaining = 0;
 
 char keys[ROWS][COLS] = {
@@ -79,28 +76,26 @@ Keypad_I2C keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS, I2C_ADDR, 1, 
 
 
 inline void updateVolumeFade() {
-  //Fade IN
-  if (volumeGeneral > volumeEpsilon && volumeGeneral < targetVolume) {
-    volumeGeneral *= fadeUpFactor;
-    if (volumeGeneral > targetVolume) {
-      volumeGeneral = targetVolume;
+  //fade in
+  if (volumeGeneral < targetVolume) {
+    switch(volumeGeneral) {
+      case 0: volumeGeneral = 2; break;
+      case 2: volumeGeneral = 10; break;
+      case 10: volumeGeneral = 90; break;
+      default: break;
     }
-    Serial.print("vol+ = ");
-    Serial.println(volumeGeneral);
+    volumeGeneralFloat = 0.01 * volumeGeneral;
   } 
   //Fade Out
   else if (volumeGeneral > targetVolume) {
-    volumeGeneral *= fadeDownFactor;
-    if (volumeGeneral < targetVolume) {
-      volumeGeneral = targetVolume;
-    }  
-    if (volumeGeneral < volumeEpsilon || volumeGeneral < targetVolume) {
-      volumeGeneral = targetVolume;
-    }    
-    Serial.print("vol- = ");
-    Serial.println(volumeGeneral);
+     switch(volumeGeneral) {
+      case 90: volumeGeneral = 10; break;
+      case 10: volumeGeneral = 2; break;
+      case 2: volumeGeneral = 0; break;
+      default: break;
+    }
+    volumeGeneralFloat = 0.01 * volumeGeneral;
   }
-
 }
 
 
@@ -166,12 +161,11 @@ void manageKeyPad(char key) {
 		case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': 
       nextTrack = String(setList) + String(key);
       if (playing) {
-        targetVolume = 0.0f;
+        targetVolume = 0;
         pendingStart = true;
       }
       else {
-        volumeGeneral = 0.1f;
-        targetVolume = 0.9f;
+        targetVolume = 90;
         startPlayback(nextTrack);
       }
 
@@ -180,7 +174,8 @@ void manageKeyPad(char key) {
 			setList = key;
 		break;
 		case '*': 
-		  stopPlayback();
+      pendingStop = true;
+      targetVolume = 0;
 		break;
 		case '#':    
 			volumeControl += 0.4f;
@@ -253,7 +248,7 @@ void loop() {
       int sampleCount = n / 2;
 
       for (int i = 0; i < sampleCount; i++) {
-        samples[i] = (int16_t)(samples[i] * volumeGeneral * volumeControl);
+        samples[i] = (int16_t)(samples[i] * volumeGeneralFloat * volumeControl);
       }
 
       size_t written;
@@ -261,9 +256,11 @@ void loop() {
 
       bytesRemaining -= n;
       if (bytesRemaining < 3000) {
-        volumeGeneral = 0.1f;
+        volumeGeneral = 10;
+        volumeGeneralFloat = 0.1f;
       }
       if (bytesRemaining < 1500) {
+        volumeGeneral = 0;
         volumeGeneral = 0.0f;
       }
     } 
@@ -272,10 +269,15 @@ void loop() {
     }
   }
 
-  if (pendingStart && volumeGeneral <= 0.001f) {
+  if (pendingStart && volumeGeneral == 0) {
     stopPlayback();
     startPlayback(nextTrack);
-    targetVolume = 0.9f;
+    targetVolume = 90;
     pendingStart = false;
+  }
+
+  if (pendingStop && volumeGeneral == 0) {
+    stopPlayback();
+    pendingStop = false;
   }
 }
