@@ -75,7 +75,7 @@ byte colPins[COLS] = {4, 5, 6, 7};
 Keypad_I2C keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS, I2C_ADDR, 1, &I2C_KEYS);
 
 
-inline void updateVolumeFade() {
+void updateVolumeFade() {
   //fade in
   if (volumeGeneral < targetVolume) {
     switch(volumeGeneral) {
