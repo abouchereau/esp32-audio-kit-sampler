@@ -54,14 +54,16 @@ const byte COLS = 4;
 
 char setList = 'A';
 float volumeControl = 1.0f;
-float volumeGeneral = 0.9f;   // volume réellement appliqué
+float volumeGeneral = 0.8f;   // volume réellement appliqué
 float targetVolume  = 0.9f;   // volume cible
 
 float fadeDownFactor = 0.40f; 
 float fadeUpFactor  = 5.0f;  
-float volumeEpsilon  = 0.0005f;
+float volumeEpsilon  = 0.001f;
 String nextTrack = "";
 bool pendingStart = false;
+
+uint32_t bytesRemaining = 0;
 
 char keys[ROWS][COLS] = {
   {'1','2','3','A'},
@@ -78,12 +80,12 @@ Keypad_I2C keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS, I2C_ADDR, 1, 
 
 inline void updateVolumeFade() {
   //Fade IN
-  if (volumeGeneral < targetVolume) {
+  if (volumeGeneral > volumeEpsilon && volumeGeneral < targetVolume) {
     volumeGeneral *= fadeUpFactor;
     if (volumeGeneral > targetVolume) {
       volumeGeneral = targetVolume;
     }
-    Serial.print("vol = ");
+    Serial.print("vol+ = ");
     Serial.println(volumeGeneral);
   } 
   //Fade Out
@@ -95,7 +97,7 @@ inline void updateVolumeFade() {
     if (volumeGeneral < volumeEpsilon || volumeGeneral < targetVolume) {
       volumeGeneral = targetVolume;
     }    
-    Serial.print("vol = ");
+    Serial.print("vol- = ");
     Serial.println(volumeGeneral);
   }
 
@@ -114,7 +116,7 @@ bool skipWavHeader(File &f) {
   uint16_t ch  = h[22] | (h[23] << 8);
   uint32_t sr  = h[24] | (h[25] << 8) | (h[26] << 16) | (h[27] << 24);
   uint16_t bits= h[34] | (h[35] << 8);
-  if (fmt != 1 || ch != 2 || sr != 44100 || bits != 16) return false;
+  if (fmt != 1 || ch < 1 || ch > 2 || sr != 44100 || bits != 16) return false;
   return true;
 }
 
@@ -139,9 +141,7 @@ void startPlayback(String filename) {
       return;
     }
   }
-
- // es->setOutputVolume(100);
- // es->DACmute(false);
+  bytesRemaining = wavFile.size() - wavFile.position();
   playing = true;
 }
 
@@ -154,17 +154,14 @@ void stopPlayback() {
     uint8_t zero[512] = {0};
     size_t written;
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 12; i++) {
       i2s_write(I2S_NUM_0, zero, sizeof(zero), &written, portMAX_DELAY);
     }  
-
-  //  es->setOutputVolume(0);
-  //  es->DACmute(true);
   }
 }
 
 void manageKeyPad(char key) {
-  Serial.println(key);
+  //Serial.println(key);
 	switch(key) {
 		case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': 
       nextTrack = String(setList) + String(key);
@@ -240,7 +237,9 @@ void setup() {
 
 void loop() {
   char key = keypad.getKey();
-  if (key) manageKeyPad(key);
+  if (key)  {
+    manageKeyPad(key);
+  }
 
   updateVolumeFade();
 
@@ -248,7 +247,7 @@ void loop() {
 
     uint8_t buffer[1024];
     size_t n = wavFile.read(buffer, sizeof(buffer));
-
+    
     if (n > 0) {
       int16_t* samples = (int16_t*)buffer;
       int sampleCount = n / 2;
@@ -259,13 +258,20 @@ void loop() {
 
       size_t written;
       i2s_write(I2S_NUM_0, buffer, n, &written, portMAX_DELAY);
+
+      bytesRemaining -= n;
+      if (bytesRemaining < 3000) {
+        volumeGeneral = 0.1f;
+      }
+      if (bytesRemaining < 1500) {
+        volumeGeneral = 0.0f;
+      }
     } 
     else {
       stopPlayback();
     }
   }
 
-  // 🔥 gestion propre du changement de piste
   if (pendingStart && volumeGeneral <= 0.001f) {
     stopPlayback();
     startPlayback(nextTrack);
