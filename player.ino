@@ -79,7 +79,8 @@ void updateVolumeFade() {
   //fade in
   if (volumeGeneral < targetVolume) {
     switch(volumeGeneral) {
-      case 0: volumeGeneral = 2; break;
+      case 0: volumeGeneral = 1; break;
+      case 1: volumeGeneral = 2; break;
       case 2: volumeGeneral = 10; break;
       case 10: volumeGeneral = 90; break;
       default: break;
@@ -91,7 +92,8 @@ void updateVolumeFade() {
      switch(volumeGeneral) {
       case 90: volumeGeneral = 10; break;
       case 10: volumeGeneral = 2; break;
-      case 2: volumeGeneral = 0; break;
+      case 2: volumeGeneral = 1; break;
+      case 1: volumeGeneral = 0; break;
       default: break;
     }
     volumeGeneralFloat = 0.01 * volumeGeneral;
@@ -156,7 +158,7 @@ void stopPlayback() {
 }
 
 void manageKeyPad(char key) {
-  //Serial.println(key);
+  Serial.println(key);
 	switch(key) {
 		case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': 
       nextTrack = String(setList) + String(key);
