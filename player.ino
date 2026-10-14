@@ -69,8 +69,12 @@ char keys[ROWS][COLS] = {
   {'*','0','#','D'}
 };
 
-byte rowPins[ROWS] = {0, 1, 2, 3};
-byte colPins[COLS] = {4, 5, 6, 7};
+//byte rowPins[ROWS] = {0, 1, 2, 3};
+//byte colPins[COLS] = {4, 5, 6, 7};
+
+//alignement avec la carte PCF8574
+byte rowPins[ROWS] = {3, 2, 1, 0};
+byte colPins[COLS] = {7, 6, 5, 4};
 
 Keypad_I2C keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS, I2C_ADDR, 1, &I2C_KEYS);
 
@@ -79,8 +83,7 @@ void updateVolumeFade() {
   //fade in
   if (volumeGeneral < targetVolume) {
     switch(volumeGeneral) {
-      case 0: volumeGeneral = 1; break;
-      case 1: volumeGeneral = 2; break;
+      case 0: volumeGeneral = 2; break;
       case 2: volumeGeneral = 10; break;
       case 10: volumeGeneral = 90; break;
       default: break;
@@ -92,8 +95,7 @@ void updateVolumeFade() {
      switch(volumeGeneral) {
       case 90: volumeGeneral = 10; break;
       case 10: volumeGeneral = 2; break;
-      case 2: volumeGeneral = 1; break;
-      case 1: volumeGeneral = 0; break;
+      case 2: volumeGeneral = 0; break;
       default: break;
     }
     volumeGeneralFloat = 0.01 * volumeGeneral;
@@ -159,8 +161,8 @@ void stopPlayback() {
 
 void manageKeyPad(char key) {
   Serial.println(key);
-	switch(key) {
-		case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': 
+  switch(key) {
+    case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': 
       nextTrack = String(setList) + String(key);
       if (playing) {
         targetVolume = 0;
@@ -171,23 +173,23 @@ void manageKeyPad(char key) {
         startPlayback(nextTrack);
       }
 
-		break;
-		case 'A': case 'B': case 'C': case 'D': 
-			setList = key;
-		break;
-		case '*': 
+    break;
+    case 'A': case 'B': case 'C': case 'D': 
+      setList = key;
+    break;
+    case '*': 
       pendingStop = true;
       targetVolume = 0;
-		break;
-		case '#':    
-			volumeControl += 0.4f;
-			if (volumeControl > 1.01f) {
-				volumeControl = 0.2f;
-			}			
     break;
-		default: 
-		break;
-	}
+  /*  case '#':    
+      volumeControl += 0.4f;
+      if (volumeControl > 1.01f) {
+        volumeControl = 0.2f;
+      }     
+    break;*/
+    default: 
+    break;
+  }
 }
 
 void setup() {
@@ -195,7 +197,7 @@ void setup() {
   delay(300);
   I2C_CODEC.begin(SDA_CODEC, SCL_CODEC, 400000);
   I2C_KEYS.begin(SDA_KEYS, SCL_KEYS, 100000);
-
+ 
   delay(10);
 
   i2s_driver_install(I2S_NUM_0, &i2s_cfg, 0, NULL);
